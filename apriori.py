@@ -121,8 +121,8 @@ class Apriori:
         L, support_data = self.generate_L(dataset, min_support)
         rule_list = []  # 保存满足置信度的规则
         sub_set_list = []  # 该数组保存检查过的频繁项
-        for i in range(0, len(L)):
-            for freq_set in L[i]:  # 遍历Lk
+        for k in range(len(L)):
+            for freq_set in L[k]:  # 遍历Lk
                 for sub_set in sub_set_list:  # sub_set_list中保存的是L1到Lk-1
                     if sub_set.issubset(freq_set):  # 检查sub_set是否是freq_set的子集
                         # 检查置信度是否满足要求，是则添加到规则
@@ -153,5 +153,5 @@ if __name__ == "__main__":
     # 挖掘关联规则
     data = load_data(path)  # 获取二维列表数据
     apriori = Apriori()
-    rule_list = apriori.generate_R(data, min_support=15, min_confidence=0.7)
+    rule_list = apriori.generate_R(data, min_support=15, min_confidence=0.8)
     save_rule(rule_list, save_path)
