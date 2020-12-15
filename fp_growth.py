@@ -2,69 +2,38 @@
 import os
 import time
 from tqdm import tqdm
-
-
-def load_data(path):  # 根据路径加载数据集
-	ans = []  # 将数据保存到该数组
-	if path.split(".")[-1] == "xls":  # 若路径为药方.xls
-		from xlrd import open_workbook
-		import xlwt
-		workbook = open_workbook(path)
-		sheet = workbook.sheet_by_index(0)  # 读取第一个sheet
-		for i in range(1, sheet.nrows):  # 忽视header,从第二行开始读数据,第一列为处方ID,第二列为药品清单
-			temp = sheet.row_values(i)[1].split(";")[:-1]  # 取该行数据的第二列并以“;”分割为数组
-			if len(temp) == 0: continue
-			temp = [j.split(":")[0] for j in temp]  # 将药品后跟着的药品用量去掉
-			temp = list(set(temp))  # 去重，排序
-			temp.sort()
-			ans.append(temp)  # 将处理好的数据添加到数组
-	elif path.split(".")[-1] == "csv":
-		import csv
-		with open(path, "r") as f:
-			reader = csv.reader(f)
-			for row in reader:
-				row = list(set(row))  # 去重，排序
-				row.sort()
-				ans.append(row)  # 将添加好的数据添加到数组
-	return ans  # 返回处理好的数据集，为二维数组
-
-
-def save_rule(rule, path):  # 保存结果到txt文件
-	with open(path, "w") as f:
-		f.write("index  confidence" + "   rules\n")
-		index = 1
-		for item in rule:
-			s = " {:<4d}  {:.3f}        {}=>{}\n".format(index, item[2], str(list(item[0])), str(list(item[1])))
-			index += 1
-			f.write(s)
-		f.close()
-	print("result saved,path is:{}".format(path))
+from apriori import load_data, save_rule
 
 
 class Node:
 	def __init__(self, node_name, count, parentNode):
 		self.name = node_name
 		self.count = count
-		self.nodeLink = None  # 根据nideLink可以找到整棵树中所有nodename一样的节点
+		self.nodeLink = None  # 根据nodeLink可以找到整棵树中所有nodename一样的节点
 		self.parent = parentNode  # 父亲节点
 		self.children = {}  # 子节点{节点名字:节点地址}
 
 
-class Fp_growth():
+class fp_growth:
 	def update_header(self, node, targetNode):  # 更新headertable中的node节点形成的链表
-		while node.nodeLink != None:
+		while node.nodeLink is not None:
 			node = node.nodeLink
 		node.nodeLink = targetNode
 
 	def update_fptree(self, items, node, headerTable):  # 用于更新fptree
+		"""
+		:param items: 排序后的单样本
+		:param node: 当前的树头节点
+		:param headerTable: 项头表
+		"""
 		if items[0] in node.children:
 			# 判断items的第一个结点是否已作为子结点
 			node.children[items[0]].count += 1
 		else:
 			# 创建新的分支
 			node.children[items[0]] = Node(items[0], 1, node)
-			# 更新相应频繁项集的链表，往后添加
-			if headerTable[items[0]][1] == None:
+			# 更新相应频繁项集的结点链，往后添加
+			if headerTable[items[0]][1] is None:
 				headerTable[items[0]][1] = node.children[items[0]]
 			else:
 				self.update_header(headerTable[items[0]][1], node.children[items[0]])
@@ -73,11 +42,11 @@ class Fp_growth():
 			self.update_fptree(items[1:], node.children[items[0]], headerTable)
 
 	def create_fptree(self, data_set, min_support, flag=False):  # 建树主函数
-		'''
+		"""
 		根据data_set创建fp树
 		header_table结构为
 		{"nodename":[num,node],..} 根据node.nodelink可以找到整个树中的所有nodename
-		'''
+		"""
 		item_count = {}  # 统计各项出现次数
 		for t in data_set:  # 第一次遍历，得到频繁一项集
 			for item in t:
@@ -113,20 +82,16 @@ class Fp_growth():
 		return tree_header, headerTable
 
 	def find_path(self, node, nodepath):
-		'''
-		递归将node的父节点添加到路径
-		'''
-		if node.parent != None:
+		# 递归将node的父节点添加到路径
+		if node.parent is not None:
 			nodepath.append(node.parent.name)
 			self.find_path(node.parent, nodepath)
 
 	def find_cond_pattern_base(self, node_name, headerTable):
-		'''
-		根据节点名字，找出所有条件模式基
-		'''
+		# 根据节点名字，找出所有条件模式基
 		treeNode = headerTable[node_name][1]
 		cond_pat_base = {}  # 保存所有条件模式基
-		while treeNode != None:
+		while treeNode is not None:
 			nodepath = []
 			self.find_path(treeNode, nodepath)
 			if len(nodepath) > 1:
@@ -136,7 +101,8 @@ class Fp_growth():
 
 	def create_cond_fptree(self, headerTable, min_support, temp, freq_items, support_data):
 		# 最开始的频繁项集是headerTable中的各元素
-		freqs = [v[0] for v in sorted(headerTable.items(), key=lambda p: p[1][0])]  # 根据频繁项的总频次排序
+		# 根据频繁项的总频次 升序排序
+		freqs = [v[0] for v in sorted(headerTable.items(), key=lambda p: p[1][0])]
 		for freq in freqs:  # 对每个频繁项
 			freq_set = temp.copy()
 			freq_set.add(freq)
@@ -155,19 +121,22 @@ class Fp_growth():
 					cond_pat_dataset.append(item_temp)
 			# 创建条件模式树
 			cond_tree, cur_headtable = self.create_fptree(cond_pat_dataset, min_support)
-			if cur_headtable != None:
-				self.create_cond_fptree(cur_headtable, min_support, freq_set, freq_items, support_data)  # 递归挖掘条件FP树
+			if cur_headtable is not None:
+				# 递归挖掘条件FP树
+				self.create_cond_fptree(cur_headtable, min_support, freq_set, freq_items, support_data)
 
 	def generate_L(self, data_set, min_support):
-		freqItemSet = set()
+		freqItemSet = set()  # 所有频繁项集合
 		support_data = {}
-		tree_header, headerTable = self.create_fptree(data_set, min_support, flag=True)  # 创建数据集的fptree
-		# 创建各频繁一项的fptree，并挖掘频繁项并保存支持度计数
+		# 创建数据集的fptree
+		tree_header, headerTable = self.create_fptree(data_set, min_support, flag=True)
+		# 创建各频繁一项集的条件fptree，并挖掘频繁项 保存支持度计数
 		self.create_cond_fptree(headerTable, min_support, set(), freqItemSet, support_data)
 
 		max_l = 0
 		for i in freqItemSet:  # 将频繁项根据大小保存到指定的容器L中
-			if len(i) > max_l: max_l = len(i)
+			if len(i) > max_l:
+				max_l = len(i)
 		L = [set() for _ in range(max_l)]
 		for i in freqItemSet:
 			L[len(i) - 1].add(i)
@@ -175,19 +144,18 @@ class Fp_growth():
 			print("frequent item {}:{}".format(i + 1, len(L[i])))
 		return L, support_data
 
-	def generate_R(self, data_set, min_support, min_conf):
+	def generate_R(self, data_set, min_support, min_confidence):
 		L, support_data = self.generate_L(data_set, min_support)
 		rule_list = []
 		sub_set_list = []
-		for i in range(0, len(L)):
+		for i in range(len(L)):
 			for freq_set in L[i]:
 				for sub_set in sub_set_list:
 					if sub_set.issubset(
 							freq_set) and freq_set - sub_set in support_data:  # and freq_set-sub_set in support_data
 						conf = support_data[freq_set] / support_data[freq_set - sub_set]
 						big_rule = (freq_set - sub_set, sub_set, conf)
-						if conf >= min_conf and big_rule not in rule_list:
-							# print freq_set-sub_set, " => ", sub_set, "conf: ", conf
+						if conf >= min_confidence and big_rule not in rule_list:
 							rule_list.append(big_rule)
 				sub_set_list.append(freq_set)
 		rule_list = sorted(rule_list, key=lambda x: (x[2]), reverse=True)
@@ -196,24 +164,21 @@ class Fp_growth():
 
 if __name__ == "__main__":
 
-	##config
-	# filename="药方.xls"
-	# min_support=500#最小支持度
-	# min_conf=0.9#最小置信度
-
-	filename = "groceries.csv"
-	min_support = 25  # 最小支持度
-	min_conf = 0.7  # 最小置信度
+	filename="处方数据.xls"
+	# filename = "groceries.csv"
 
 	spend_time = []
 	current_path = os.getcwd()
-	if not os.path.exists(current_path + "/log"):
-		os.mkdir("log")
+	if not os.path.exists(current_path + "/output"):
+		os.mkdir("output")
 
 	path = current_path + "/dataset/" + filename
-	save_path = current_path + "/log/" + filename.split(".")[0] + "_fpgrowth.txt"
+	save_path = current_path + "/output/" + filename.split(".")[0] + "_fpgrowth.txt"
 
 	data_set = load_data(path)
-	fp = Fp_growth()
-	rule_list = fp.generate_R(data_set, min_support, min_conf)
+	fp = fp_growth()
+	# groceries数据集 该参数下频繁项最大为5
+	# rule_list = fp.generate_R(data_set, min_support=15, min_confidence=0.7)
+	# 处方数据数据集 该参数下频繁项最大为8
+	rule_list = fp.generate_R(data_set, min_support=600, min_confidence=0.9)
 	save_rule(rule_list, save_path)

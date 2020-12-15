@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 def load_data(filepath):  # 根据路径加载数据集
     ans = []  # 将数据保存到该数组
-    if filepath.split(".")[-1] == "xls":  # 若路径为药方.xls
+    if filepath.split(".")[-1] == "xls":  # 若路径为处方数据.xls
         from xlrd import open_workbook
         workbook = open_workbook(filepath)
         sheet = workbook.sheet_by_index(0)  # 读取第一个sheet
@@ -89,7 +89,6 @@ class Apriori:
                         item_count[item] = 1
                     else:
                         item_count[item] += 1
-        t_num = float(len(dataset))
         for item in item_count:  # 将满足支持度的候选项添加到频繁项集中
             if item_count[item] >= min_support:
                 Lk.add(item)
@@ -131,19 +130,15 @@ class Apriori:
                         if conf >= min_confidence and big_rule not in rule_list:
                             rule_list.append(big_rule)
                 sub_set_list.append(freq_set)
+        # 降序排序
         rule_list = sorted(rule_list, key=lambda x: (x[2]), reverse=True)
         return rule_list
 
 
 if __name__ == "__main__":
-    # filename = "处方数据.xls"
-    # min_support = 600 # 最小支持度
-    # min_conf = 0.9 # 最小置信度
-    # size = 8 # 频繁项最大大小
-    filename = "groceries.csv"
-    # min_support = 25  # 最小支持度
-    # min_conf = 0.7  # 最小置信度
-    # size = 5  # 频繁项最大大小
+
+    filename = "处方数据.xls"
+    # filename = "groceries.csv"
 
     current_path = os.getcwd()
     if not os.path.exists(current_path + "/output"):
@@ -153,5 +148,8 @@ if __name__ == "__main__":
     # 挖掘关联规则
     data = load_data(path)  # 获取二维列表数据
     apriori = Apriori()
-    rule_list = apriori.generate_R(data, min_support=15, min_confidence=0.8)
+    # groceries数据集 该参数下频繁项最大为5
+    # rule_list = apriori.generate_R(data, min_support=15, min_confidence=0.7)
+    # 处方数据数据集 该参数下频繁项最大为8
+    rule_list = apriori.generate_R(data, min_support=600, min_confidence=0.9)
     save_rule(rule_list, save_path)
