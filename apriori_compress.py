@@ -109,8 +109,8 @@ class Apriori_compress():
 
 if __name__ == "__main__":
 
-    filename="处方数据.xls"
-    # filename = "groceries.csv"
+    # filename="处方数据.xls"
+    filename = "groceries.csv"
 
     current_path = os.getcwd()
     if not os.path.exists(current_path + "/output"):
@@ -121,7 +121,7 @@ if __name__ == "__main__":
     data = load_data(path)
     apriori_com = Apriori_compress()
     # groceries数据集 该参数下频繁项最大为5
-    # rule_list = apriori_com.generate_R(data, min_support=15, min_confidence=0.7)
+    rule_list = apriori_com.generate_R(data, min_support=15, min_confidence=0.7)
     # 处方数据数据集 该参数下频繁项最大为8
-    rule_list = apriori_com.generate_R(data, min_support=600, min_confidence=0.9)
+    # rule_list = apriori_com.generate_R(data, min_support=600, min_confidence=0.9)
     save_rule(rule_list, save_path)
